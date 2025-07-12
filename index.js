@@ -24,29 +24,27 @@ async function run() {
     const parcelCollection = database.collection("parcels");
 
 
- app.get('/parcels', async (req, res) => {
-            const parcels = await parcelCollection.find().toArray();
-            res.send(parcels);
-        });
+ 
 
         // parcels api
         // GET: All parcels OR parcels by user (created_by), sorted by latest
-        app.get('/parcels', async (req, res) => {
-            try {
-                const userEmail = req.query.email;
+       // ✅ Keep only this one:
+app.get('/parcels', async (req, res) => {
+    try {
+        const userEmail = req.query.email;
+        const query = userEmail ? { email: userEmail } : {};
 
-                const query = userEmail ? { created_by: userEmail } : {};
-                const options = {
-                    sort: { createdAt: -1 }, // Newest first
-                };
+        const options = {
+            sort: { createdAt: -1 },
+        };
+        const parcels = await parcelCollection.find(query, options).toArray();
+        res.send(parcels);
+    } catch (error) {
+        console.error('Error fetching parcels:', error);
+        res.status(500).send({ message: 'Failed to get parcels' });
+    }
+});
 
-                const parcels = await parcelCollection.find(query, options).toArray();
-                res.send(parcels);
-            } catch (error) {
-                console.error('Error fetching parcels:', error);
-                res.status(500).send({ message: 'Failed to get parcels' });
-            }
-        });
 
 
     // 📨 POST - Create a new parcel with email and timestamp
@@ -69,26 +67,8 @@ async function run() {
       }
     });
 
-    // // 📦 GET - All parcels, sorted by latest createdAt
-    // app.get('/parcels', async (req, res) => {
-    //   try {
-    //     const parcels = await parcelCollection.find().sort({ createdAt: -1 }).toArray();
-    //     res.json(parcels);
-    //   } catch (error) {
-    //     res.status(500).json({ error: 'Failed to fetch parcels' });
-    //   }
-    // });
-
-    // // 📧 GET - Parcels by user email, sorted by latest
-    // app.get('/parcels/user/:email', async (req, res) => {
-    //   const email = req.params.email;
-    //   try {
-    //     const userParcels = await parcelCollection.find({ email }).sort({ createdAt: -1 }).toArray();
-    //     res.json(userParcels);
-    //   } catch (error) {
-    //     res.status(500).json({ error: 'Failed to fetch user parcels' });
-    //   }
-    // });
+   
+  
 
     // 🗑️ DELETE - Delete by ID
     app.delete('/parcels/:id', async (req, res) => {
@@ -104,6 +84,34 @@ async function run() {
         res.status(500).json({ error: 'Failed to delete parcel' });
       }
     });
+
+    // payment related api 
+    // 🔑 Create Stripe Payment Intent
+app.post('/create-payment-intent', async (req, res) => {
+  const { parcelId } = req.body;
+
+  try {
+    const parcel = await parcelCollection.findOne({ _id: new ObjectId(parcelId) });
+
+    if (!parcel || !parcel.cost) {
+      return res.status(400).send({ error: 'Parcel not found or cost missing' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: parcel.cost * 100, // Stripe uses the smallest currency unit
+      currency: 'bdt',
+      metadata: { integration_check: 'accept_a_payment', parcelId },
+    });
+
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  } catch (err) {
+    console.error('Payment intent error:', err);
+    res.status(500).send({ error: 'Failed to create payment intent' });
+  }
+});
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
