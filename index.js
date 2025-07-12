@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -43,6 +44,21 @@ app.get('/parcels', async (req, res) => {
         console.error('Error fetching parcels:', error);
         res.status(500).send({ message: 'Failed to get parcels' });
     }
+});
+//  get percel by id 
+// ✅ GET - Parcel by ID (for payment page)
+app.get('/parcels/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const parcel = await parcelCollection.findOne({ _id: new ObjectId(id) });
+    if (!parcel) {
+      return res.status(404).json({ error: 'Parcel not found' });
+    }
+    res.send(parcel);
+  } catch (err) {
+    console.error('Error getting parcel by ID:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 
