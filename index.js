@@ -111,6 +111,33 @@ app.post('/create-payment-intent', async (req, res) => {
     res.status(500).send({ error: 'Failed to create payment intent' });
   }
 });
+// update parcels
+// ✅ Update parcel payment status after successful payment
+app.patch('/parcels/payment/:id', async (req, res) => {
+  const parcelId = req.params.id;
+  const { transactionId } = req.body;
+
+  try {
+    const result = await parcelCollection.updateOne(
+      { _id: new ObjectId(parcelId) },
+      {
+        $set: {
+          payment_status: 'paid',
+          transactionId,
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.send({ message: 'Payment status updated' });
+    } else {
+      res.status(404).send({ error: 'Parcel not found or already updated' });
+    }
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).send({ error: 'Failed to update payment status' });
+  }
+});
 
 
     await client.db("admin").command({ ping: 1 });
