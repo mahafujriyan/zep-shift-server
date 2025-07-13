@@ -74,6 +74,8 @@ app.get('/parcels/:id', async (req, res) => {
 
         parcel.createdAt = new Date();
         parcel.weight = Number(parcel.weight);
+        parcel.cost = Number(parcel.cost);
+
 
         const result = await parcelCollection.insertOne(parcel);
         res.status(201).json({ message: 'Parcel created successfully', id: result.insertedId });
@@ -107,14 +109,27 @@ app.post('/create-payment-intent', async (req, res) => {
   const { parcelId } = req.body;
 
   try {
+    console.log('Creating payment intent for parcelId:', parcelId);
+
+    if (!ObjectId.isValid(parcelId)) {
+      console.error('Invalid parcelId format');
+      return res.status(400).send({ error: 'Invalid parcel ID format' });
+    }
+
     const parcel = await parcelCollection.findOne({ _id: new ObjectId(parcelId) });
 
-    if (!parcel || !parcel.cost) {
-      return res.status(400).send({ error: 'Parcel not found or cost missing' });
+    if (!parcel) {
+      console.error('Parcel not found for ID:', parcelId);
+      return res.status(400).send({ error: 'Parcel not found' });
+    }
+
+    if (!parcel.cost || typeof parcel.cost !== 'number') {
+      console.error('Parcel found but cost missing or invalid:', parcel);
+      return res.status(400).send({ error: 'Parcel cost missing or invalid' });
     }
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: parcel.cost * 100, // Stripe uses the smallest currency unit
+      amount: parcel.cost * 100, 
       currency: 'bdt',
       metadata: { integration_check: 'accept_a_payment', parcelId },
     });
@@ -127,6 +142,7 @@ app.post('/create-payment-intent', async (req, res) => {
     res.status(500).send({ error: 'Failed to create payment intent' });
   }
 });
+
 // update parcels
 // ✅ Update parcel payment status after successful payment
 app.patch('/parcels/payment/:id', async (req, res) => {
