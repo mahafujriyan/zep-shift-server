@@ -23,6 +23,7 @@ async function run() {
   try {
     const database = client.db("parcel_delivary");
     const parcelCollection = database.collection("parcels");
+    const paymentCollection = database.collection("payment");
 
 
  
@@ -143,13 +144,37 @@ app.post('/create-payment-intent', async (req, res) => {
   }
 });
 
+//  get payment history
+app.get('/payments', async (req, res) => {
+  try {
+    const payments = await paymentCollection.find().sort({ paidAt: -1 }).toArray();
+    res.send(payments);
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).send({ error: 'Failed to fetch payment history' });
+  }
+});
+
 // update parcels
 // ✅ Update parcel payment status after successful payment
 app.patch('/parcels/payment/:id', async (req, res) => {
   const parcelId = req.params.id;
-  const { transactionId } = req.body;
+  const { transactionId, email, method } = req.body;
 
   try {
+    // Save into payments collection
+    const paymentData = {
+      parcelId,
+      transactionId,
+      email,
+      payment_method: method,
+      payment_status: 'paid',
+      paidAt: new Date()
+    };
+
+    await paymentCollection.insertOne(paymentData); 
+
+    // Also update parcel status
     const result = await parcelCollection.updateOne(
       { _id: new ObjectId(parcelId) },
       {
@@ -161,7 +186,7 @@ app.patch('/parcels/payment/:id', async (req, res) => {
     );
 
     if (result.modifiedCount > 0) {
-      res.send({ message: 'Payment status updated' });
+      res.send({ message: 'Payment saved and status updated' });
     } else {
       res.status(404).send({ error: 'Parcel not found or already updated' });
     }
@@ -170,6 +195,8 @@ app.patch('/parcels/payment/:id', async (req, res) => {
     res.status(500).send({ error: 'Failed to update payment status' });
   }
 });
+
+
 
 
     await client.db("admin").command({ ping: 1 });
